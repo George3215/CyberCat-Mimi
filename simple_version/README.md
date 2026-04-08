@@ -12,4 +12,7 @@
 python simple_version/cyber_cat.py
 ```
 
+## 🌟 鸣谢
+- **素材来源**：[Cats Pixel Asset Pack](https://pop-shop-packs.itch.io/cats-pixel-asset-pack) by Pop Shop Packs.
+
 *注意：本版本不支持智能对话和 AI 决策。*

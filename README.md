@@ -101,8 +101,8 @@ python main.py
 ---
 
 ## 🌟 鸣谢
-- 视觉素材：感谢 8-bit 猫咪开源素材（请根据实际路径替换）。
-- 动力来源：Ollama 提供本地快速推断。
+- **视觉素材**：本项目使用了来自 itch.io 的开源素材 [Cats Pixel Asset Pack](https://pop-shop-packs.itch.io/cats-pixel-asset-pack)，由 Pop Shop Packs 创作。感谢作者提供如此精美的 8-bit 猫咪素材！
+- **动力来源**：Ollama 提供本地快速推断。
 
 ---
 > **提示**：如果猫咪停留原地不动，请检查 Ollama 服务是否已开启，并确保控制台没有网络连接错误。
