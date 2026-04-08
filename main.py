@@ -11,9 +11,6 @@ def main():
     """
     app = QApplication(sys.argv)
     
-    # 允许主窗口关闭时不立即退出程序（防止气泡等子窗口异常导致崩溃）
-    app.setImplicitExit(True)
-    
     # 初始化主窗口
     cat = DesktopCat()
     

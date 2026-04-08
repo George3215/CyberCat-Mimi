@@ -36,10 +36,12 @@ class SpeechBubble(QWidget):
         
         # 应用样式配置
         style = BUBBLE_STYLE
+        font = QFont(style['font'], style['font_size'])
+        self.setFont(font) # 将字体应用于整个窗口以确保度量一致
+        
         self.label.setStyleSheet(
             f"color: {style['text']}; "
-            f"font-family: {style['font']}; "
-            f"font-size: {style['font_size']}px;"
+            f"background: transparent;"
         )
         
         # 布局管理
@@ -48,6 +50,7 @@ class SpeechBubble(QWidget):
             style["padding"], style["padding"], 
             style["padding"], style["padding"] + 10 # 为底部箭头留出空间
         )
+        self.layout.setSpacing(0)
         self.layout.addWidget(self.label)
         
         self.hide()
@@ -55,13 +58,26 @@ class SpeechBubble(QWidget):
     def setText(self, text):
         """设置文本并根据内容自动调整气泡大小"""
         self.label.setText(text)
-        metrics = QFontMetrics(self.font())
-        max_w = BUBBLE_STYLE["max_width"]
-        rect = metrics.boundingRect(0, 0, max_w, 1000, Qt.TextFlag.TextWordWrap, text)
         
-        w = max(60, rect.width() + BUBBLE_STYLE["padding"] * 2)
-        h = max(40, rect.height() + BUBBLE_STYLE["padding"] * 2 + 10)
-        self.resize(w, h)
+        # 使用标签实际的字体度量
+        metrics = self.label.fontMetrics()
+        max_w = BUBBLE_STYLE["max_width"]
+        padding = BUBBLE_STYLE["padding"]
+        
+        # 计算适合文本的边界矩形（预留边距）
+        text_rect = metrics.boundingRect(
+            0, 0, 
+            max_w - padding * 2, 
+            1000, 
+            Qt.TextFlag.TextWordWrap, 
+            text
+        )
+        
+        # 计算窗口最终大小
+        w = text_rect.width() + padding * 2 + 10 # 增加额外缓冲
+        h = text_rect.height() + padding * 2 + 20 # 增加高度裕量
+        
+        self.setFixedSize(w, h)
 
     def paintEvent(self, event):
         """绘制气泡背景与小箭头"""
@@ -105,8 +121,14 @@ class DesktopCat(QWidget):
         self.direction = 1 
         self.cat_pos = QPointF(100, 100) # 初始坐标
         self.energy = 100
-        self.boredom = 0
+        self.boredom = 0 # 将作为基础无聊值
+        self.bond = 50   # 羁绊值 (0-100)
+        self.idle_counter = 0 # 闲置计数器 (用户多久没说话)
         self.log_counter = 0
+        
+        # 拖拽相关属性
+        self.dragging = False
+        self.drag_offset = QPoint()
 
         # 3. 基础组件初始化
         self.memory = CatMemory()
@@ -143,27 +165,30 @@ class DesktopCat(QWidget):
         self.brain.start()
 
         # 6. 定时器启动
-        # 动画循环
+        # 动画循环 (主节奏)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_loop)
         self.timer.start(ANIMATION_INTERVAL)
         
-        # AI 决策周期
-        self.decision_timer = QTimer(self)
-        self.decision_timer.timeout.connect(self.trigger_decision)
-        self.decision_timer.start(PERCEPTION_INTERVAL)
+        # 移除了 decision_timer 以节省资源，AI 仅在对话时唤醒。
+        self.log_counter = 0
 
         self.show()
 
     def trigger_decision(self):
         """构建环境感知 JSON 并请求 AI 进行行为决策"""
         screen = QApplication.primaryScreen().availableGeometry()
+        
+        # 计算孤独感：每 10s 增加一点，最高 100
+        loneliness = min(100, self.idle_counter // 100)
+        
         state_json = {
             "current_state": self.state,
             "pos": {"x": int(self.cat_pos.x()), "y": int(self.cat_pos.y())},
             "energy": self.energy,
-            "boredom": self.boredom,
-            "near_edge": self.cat_pos.x() > screen.right() - 200 or self.cat_pos.x() < screen.left() + 100,
+            "bond": self.bond,
+            "loneliness": loneliness,
+            "idle_time_sec": self.idle_counter // 10,
             "history": self.memory.get_history()
         }
         self.brain.request_decision(state_json)
@@ -186,7 +211,19 @@ class DesktopCat(QWidget):
         self.energy = max(0, min(100, self.energy + e_change))
         self.boredom = max(0, min(100, self.boredom + b_change))
 
-        # B. 执行当前行为的动作跟进
+        # B. 被动随机行为逻辑 (取代 AI 轮询)
+        # 如果当前不是追逐状态，且气泡没显示，则有微小概率随机切换简单动作
+        self.idle_counter += 1
+        if not self.speech_bubble.isVisible() and self.state != 'run':
+            if random.random() < 0.005: # 约每 20s 发生一次
+                next_action = random.choice(['sit', 'look', 'lay'])
+                self.apply_decision(next_action)
+            
+            # 定时触发孤独行为：如果闲置超过 2 分钟 (约 1200 帧)，自动提示 AI 
+            if self.idle_counter == 1200:
+                self.trigger_decision()
+
+        # C. 执行当前行为的动作跟进
         self.current_behavior.update()
 
         # C. 定时记录后台状态日志 (每 10 秒)
@@ -266,13 +303,50 @@ class DesktopCat(QWidget):
         menu.addAction(exit_action)
         menu.exec(event.globalPos())
 
+    # 鼠标拖动逻辑
+    def mousePressEvent(self, event):
+        """按下鼠标左键开始拖拽"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.dragging = True
+            # 记录鼠标在窗口内的相对偏移量
+            self.drag_offset = event.position().toPoint()
+            # 拖动时可以考虑暂停一些剧烈行为或更新
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        """移动鼠标进行窗口跟随"""
+        if self.dragging:
+            # 计算全局新坐标并更新逻辑坐标
+            new_pos = event.globalPosition().toPoint() - self.drag_offset
+            self.cat_pos = QPointF(new_pos)
+            self.move(new_pos)
+            self.reposition_bubble() # 气泡实时跟随
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        """松开鼠标结束拖拽"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.dragging = False
+            event.accept()
+
     def show_talk_dialog(self):
         """打开输入对话框"""
         text, ok = QInputDialog.getText(self, 'CyberCat 对话', '输入你想对 Mimi 说的话:')
         if ok and text:
             # 立即反馈思考状态
             self.display_message("...", duration=20000) 
-            state_json = { "energy": self.energy, "boredom": self.boredom, "state": self.state }
+            
+            # 互动增加羁绊
+            self.bond = min(100, self.bond + 2)
+            self.idle_counter = 0 # 重置闲置时间
+            
+            # 对话请求 (包含情感参数)
+            state_json = { 
+                "energy": self.energy, 
+                "bond": self.bond,
+                "loneliness": 0,
+                "state": self.state 
+            }
             self.brain.request_talk(text, state_json)
 
     def moveEvent(self, event):

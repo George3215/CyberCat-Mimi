@@ -3,6 +3,7 @@ import random
 from PyQt6.QtCore import QThread, pyqtSignal
 from brain.llm_client import LLMClient
 from brain.prompt_builder import PromptBuilder
+from brain.vision import get_active_window_info
 from config import VALID_ACTIONS, DEFAULT_ACTION, TALK_ON_AUTO_DECISION_PROB
 
 class DecisionWorker(QThread):
@@ -40,6 +41,9 @@ class DecisionWorker(QThread):
                 user_input, state_json = self.pending_talk
                 self.pending_talk = None
                 
+                # 在后台线程探测活动窗口
+                state_json["active_window"] = get_active_window_info()
+                
                 prompt = self.builder.build_talk_prompt(user_input, state_json)
                 print(f"\n[猫咪思维中心] 收到人类发言: {user_input}")
                 
@@ -49,8 +53,14 @@ class DecisionWorker(QThread):
                 
                 if res_dict and isinstance(res_dict, dict):
                     action = res_dict.get("action", DEFAULT_ACTION)
-                    # 兼容性处理：模型可能使用 say 或 response 作为回复键
                     say = res_dict.get("say") or res_dict.get("response") or ""
+                    inner_voice = res_dict.get("inner_voice", "")
+                    mood = res_dict.get("mood_sync", {})
+                    
+                    if inner_voice:
+                        print(f"🕯️ [Mimi 的内心独白] {inner_voice}")
+                    if mood:
+                        print(f"📊 [情感同步] 眷恋: {mood.get('love_index', 0)} | 孤独: {mood.get('loneliness', 0)} | 心情: {mood.get('current_feeling', '---')}")
                     
                     if say:
                         self.talk_response.emit(say)
@@ -64,6 +74,9 @@ class DecisionWorker(QThread):
                 state_json = self.pending_state
                 self.pending_state = None
                 
+                # 在后台线程探测活动窗口
+                state_json["active_window"] = get_active_window_info()
+                
                 prompt = self.builder.build_decision_prompt(state_json)
                 print(f"\n[猫咪思维中心] 定时感知环境: {state_json}")
                 
@@ -75,10 +88,17 @@ class DecisionWorker(QThread):
                 if res_dict and isinstance(res_dict, dict):
                     action = res_dict.get("action", DEFAULT_ACTION)
                     say = res_dict.get("say") or res_dict.get("response") or ""
+                    inner_voice = res_dict.get("inner_voice", "")
+                    mood = res_dict.get("mood_sync", {})
+                    
+                    if inner_voice:
+                        print(f"🕯️ [Mimi 的内心独白] {inner_voice}")
+                    if mood:
+                        print(f"📊 [情感同步] 眷恋: {mood.get('love_index', 0)} | 孤独: {mood.get('loneliness', 0)} | 心情: {mood.get('current_feeling', '---')}")
                     
                     # 自动行为时有一定概率开口说话，增强“活着”的感觉
-                    if say and random.random() < TALK_ON_AUTO_DECISION_PROB:
-                         self.talk_response.emit(say)
+                    if say and random.random() < TAL_ON_AUTO_DECISION_PROB:
+                        self.talk_response.emit(say)
                     
                     # 过滤动作，防止模型幻觉
                     final_action = action if action in VALID_ACTIONS else DEFAULT_ACTION
