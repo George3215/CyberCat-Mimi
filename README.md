@@ -56,9 +56,13 @@ IMG_PATH = "Cats Download/orange_0.png"
 
 ---
 
-## 🤝 贡献
+## 🎨 素材来源与版权声明 (Credits & Copyright)
 
-欢迎提交 Issue 或 Pull Request 来增加更多有趣的猫咪行为、素材或者优化代码！
+本项目的猫咪像素动画素材源自：[SecretHideout @ Itch.io](https://secrethideout.itch.io/)。
+
+- **声明**：本项目仅供学习与交流使用。
+- **版权归属**：素材的版权归原作者 SecretHideout 所有。
+- **免责说明**：如果素材的使用侵犯了您的权益，请联系我，我会立即删除相关内容。
 
 ## 📄 开源协议
 
